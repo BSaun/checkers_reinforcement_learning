@@ -18,8 +18,7 @@ class Player:
     
     NOTES:
     1) Create set playerID method
-    """
-    
+     """
     def set_board(self, the_board):
         """
         Sets the Board object which is known by the AI.
@@ -39,8 +38,12 @@ class Player:
         """
         pass
 
+class RandomAgent(Player):
+    def get_next_move(self):
+        return random.choice(self.board.get_possible_next_moves())
 
-def reward_function(state_info1, state_info2):
+
+def reward_function(state_info1, state_info2, player_type):
     """
     Reward for transitioning from state with state_info1 to state with state_info2.
     
@@ -48,12 +51,20 @@ def reward_function(state_info1, state_info2):
     1) do something better with where/how this is implemented
     2) should give some kind of negative for tieing
     """
-    if state_info2[1] == 0 and state_info2[3] == 0:
-        return 12
-    if state_info2[0] == 0 and state_info2[2] == 0:
-        return -12
-    return state_info2[0]-state_info1[0] + 2*(state_info2[2]-state_info1[2])-(state_info2[1]-state_info1[1])-2*(state_info2[3]-state_info1[3])
+    if player_type == 1:
+        if state_info2[1] == 0 and state_info2[3] == 0:
+            return 12
+        if state_info2[0] == 0 and state_info2[2] == 0:
+            return -12
+        return state_info2[0]-state_info1[0] + 2*(state_info2[2]-state_info1[2])-(state_info2[1]-state_info1[1])-2*(state_info2[3]-state_info1[3])
 
+    else:
+        if state_info2[1] == 0 and state_info2[3] == 0:
+            return -12
+        if state_info2[0] == 0 and state_info2[2] == 0:
+            return 12
+        return -(state_info2[0]-state_info1[0]) - 2*(state_info2[2]-state_info1[2])+(state_info2[1]-state_info1[1])+2*(state_info2[3]-state_info1[3])
+    
 
 class Q_Learning_AI(Player):
     """
@@ -168,10 +179,13 @@ class Q_Learning_AI(Player):
         cur_state = self.get_states_from_boards_spots([self.board.spots])[0]
         transition = (self.pre_last_move_state ,self.post_last_move_state)
 
-        self.transitions[transition] = self.transitions[transition] + self.learning_rate * reward_function(transition[0],cur_state)
+        self.transitions[transition] = self.transitions[transition] + self.learning_rate * reward_function(transition[0],cur_state, self.player_id)
 
         self.pre_last_move_state = None
         self.post_last_move_state = None
+
+        self.learning_rate *= .99995
+        self.random_move_probability *= .99995
 
 
 
@@ -230,7 +244,7 @@ class Q_Learning_AI(Player):
             self.transitions = {literal_eval(k): v for k,v in json.load(fp).items()}
         
         
-    def get_optimal_potential_value(self, depth):
+    def get_optimal_potential_value(self):
         """
         Look ahead a given number of moves and return the maximal value associated 
         with a move of that depth. 
@@ -239,15 +253,10 @@ class Q_Learning_AI(Player):
         1) Look forward in (actual) own transition states.  
         2) Look at board as self being the opponent and look forward in that situations transition states
         3) If not at depth go back to step (1)
-        
-        TODO:
-        1) Approach this with algorithm similar to how minimax works
-            a) look for set of transitions from (I think) current state of length depth by doing minimax
-            b) Might also use alpha-beta pruning
             
         NOTES:
-        1) depth is not actually looking ahead in possible moves, but actually simulating something similar (hopefully similar)
-        2) ONLY WORKS FOR DEPTH OF 1 RIGHT NOW
+         1) depth is not actually looking ahead in possible moves, but actually simulating something similar (hopefully similar)
+         2) ONLY WORKS FOR DEPTH OF 1 RIGHT NOW
         """
         answer = float("-inf")
         cur_state = self.get_states_from_boards_spots([self.board.spots])[0]
@@ -274,10 +283,10 @@ class Q_Learning_AI(Player):
     
             transition = (self.pre_last_move_state ,self.post_last_move_state)
             try:# self.transitions.get(transition) is not None:#%%%%%%%%%%%%%%%%%%%%%%%%%%%% FOR (1)
-                max_future_state = self.get_optimal_potential_value(1)
-                self.transitions[transition] = self.transitions[transition] + self.learning_rate * (reward_function(transition[0],cur_state)+ self.discount_factor* max_future_state - self.transitions[transition])
+                max_future_state = self.get_optimal_potential_value()
+                self.transitions[transition] = self.transitions[transition] + self.learning_rate * (reward_function(transition[0],cur_state, self.player_id) + self.discount_factor * max_future_state - self.transitions[transition])
             except:#%%%%%%%%%%%%%%%%%%%%%%%%%%%% FOR (1)
-                self.transitions[transition] = self.transitions[transition] + self.learning_rate * (reward_function(transition[0],cur_state))
+                self.transitions[transition] = self.transitions[transition] + self.learning_rate * (reward_function(transition[0],cur_state, self.player_id))
         
         
         self.pre_last_move_state = self.get_states_from_boards_spots([self.board.spots])[0]#%%%%%%%%%%%%%%%%%%%%%%%%%%%% FOR (1)
@@ -291,13 +300,6 @@ class Q_Learning_AI(Player):
         for j in range(len(possible_next_states)):
             if tuple(possible_next_states[j]) == self.post_last_move_state:
                 considered_moves.append(possible_next_moves[j])
-                
-                
-        #I believe with the updated board.is_game_over() I don't need to use this try statement 
-#         try:
-#             return considered_moves[random.randint(0,len(considered_moves)-1)]
-#         except ValueError:
-#             return []
         
         return considered_moves[random.randint(0,len(considered_moves)-1)]
 
@@ -421,7 +423,6 @@ def play_n_games(player1, player2, num_games, move_limit):
     players_move = player1
     outcome_counter = [[-1,-1,-1,-1,-1,-1] for j in range(num_games)] 
     for j in range(num_games):
-        #print(j)
         move_counter = 0
         while not game_board.is_game_over() and move_counter < move_limit:
             game_board.make_move(players_move.get_next_move())
@@ -458,13 +459,13 @@ def play_n_games(player1, player2, num_games, move_limit):
              
             player1.game_completed()
             player2.game_completed()
-            #game_board.print_board()
+
             game_board.reset_board()
      
     return outcome_counter
 
 
-def pretty_outcome_display(outcomes):
+def pretty_outcome_display(outcomes, player1, player2):
     """
     Prints the outcome of play_n_games in a easy to understand format.
     
@@ -486,8 +487,8 @@ def pretty_outcome_display(outcomes):
         game_wins[outcome[0]] = game_wins[outcome[0]] + 1
     
     print("Games Played: ".ljust(35), len(outcomes))
-    print("Player 1 wins: ".ljust(35), game_wins[0])
-    print("Player 2 wins: ".ljust(35), game_wins[1])
+    print(player1 + " wins: ".ljust(35), game_wins[0])
+    print(player2 + " wins: ".ljust(35), game_wins[1])
     print("Games exceeded move limit: ".ljust(35), game_wins[3])
     print("Games tied: ".ljust(35), game_wins[2])
     print("Total moves made: ".ljust(35), total_moves)  
@@ -496,13 +497,14 @@ def pretty_outcome_display(outcomes):
     print("Min moves made: ".ljust(35), min_moves_made)
     
 
-def plot_end_game_information(outcome, interval, title="End of Game Results"):
+def plot_end_game_information(outcome, player1, player2, interval, title="End of Game Results"):
     """
     """
     player1_wins = [0 for _ in range(int(len(outcome)/interval))]
     player2_wins = [0 for _ in range(int(len(outcome)/interval))]
-    ties = [0 for _ in range(int(len(outcome)/interval))]
-    move_limit = [0 for _ in range(int(len(outcome)/interval))]
+
+    x_axis = [i for i in range(0, len(outcome), interval)]
+    xi = list(range(len(x_axis)))
     
     for j in range(int(len(outcome)/interval)):
         for i in range(interval):
@@ -510,84 +512,93 @@ def plot_end_game_information(outcome, interval, title="End of Game Results"):
                 player1_wins[j] = player1_wins[j] + 1
             elif outcome[j*interval + i][0] == 1:
                 player2_wins[j] = player2_wins[j] + 1
-            elif outcome[j*interval + i][0] == 2:
-                ties[j] = ties[j] + 1
-            else:
-                move_limit[j] = move_limit[j] + 1
                 
     plt.figure(title)
+    plt.title(title)
+
+    plt.xticks(xi, x_axis)
     
-    p1_win_graph, = plt.plot(player1_wins, label = "Player 1 wins")
-    p2_win_graph, = plt.plot(player2_wins, label = "Player 2 wins")
-    tie_graph, = plt.plot(ties, label = "Ties")
-    move_limit_graph, = plt.plot(move_limit, label = "Move limit reached")
+    p1_win_graph, = plt.plot(player1_wins, label = (player1 + " wins"))
+    p2_win_graph, = plt.plot(player2_wins, label = (player2 + " wins"))
     
-    plt.ylabel("Occurance per " +str(interval) + " games")
-    plt.xlabel("Interval")
+    plt.ylabel("Wins per every " + str(interval) + " games")
+    plt.xlabel("Games Played")
     
-    plt.legend(handles=[p1_win_graph, p2_win_graph, tie_graph, move_limit_graph])
+    plt.legend(handles=[p1_win_graph, p2_win_graph])
 
 
-
- 
-LEARNING_RATE = .005  
+LEARNING_RATE = .01  
 DISCOUNT_FACTOR = .3
-NUM_GAMES_TO_TRAIN = 100
+NUM_GAMES_TO_TRAIN = 250
 NUM_TRAINING_ROUNDS = 25
-NUM_VALIDATION_GAMES = 5
+NUM_VALIDATION_ROUNDS = 5
+NUM_VALIDATION_GAMES = 15
 NUM_GAMES_TO_TEST = 0
 TRAINING_RANDOM_MOVE_PROBABILITY = .25
 ALPHA_BETA_DEPTH = 2
 TRAINING_MOVE_LIMIT = 500
 VALIDATION_MOVE_LIMIT = 1000
 TESTING_MOVE_LIMIT = 2000
-PLAYER1 = Q_Learning_AI(True, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY)#, info_location="data.json")
-PLAYER2 = Alpha_beta(False, ALPHA_BETA_DEPTH)
-#PLAYER3 = Alpha_beta(False, 1)
-PLAYER4 = Alpha_beta(False, 3)
-# PLAYER5 = Q_Learning_AI(False, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY)
- 
-  
-#PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
+PLAYER1 = Q_Learning_AI(1, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY)#, info_location="data.json")
+PLAYER2 = Q_Learning_AI(2, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY)
+PLAYER3 = Q_Learning_AI(2, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY, info_location="data.json")
+PLAYER4 = RandomAgent()
+PLAYER5 = Alpha_beta(2, ALPHA_BETA_DEPTH)
+PLAYER6 = Q_Learning_AI(1, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY)
  
 training_info = []
-validation_info = []
 for j in range(NUM_TRAINING_ROUNDS):
     training_info.extend(play_n_games(PLAYER1, PLAYER2, NUM_GAMES_TO_TRAIN, TRAINING_MOVE_LIMIT))
-    PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
-    PLAYER1.set_random_move_probability(0)
-    PLAYER1.set_learning_rate(0)
-    validation_info.extend(play_n_games(PLAYER1, PLAYER4, NUM_VALIDATION_GAMES, VALIDATION_MOVE_LIMIT))
     print("Round " + str(j+1) + " completed!")
-    PLAYER1.set_random_move_probability(TRAINING_RANDOM_MOVE_PROBABILITY)
-    PLAYER1.set_learning_rate(LEARNING_RATE)
-    #print("")
-    #PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
-    print("")
-    PLAYER1.save_transition_information()
+
+pretty_outcome_display(training_info, "Q-Learning AI 1", "Q-Learning AI 2")
  
-    
-#plot_end_game_information(training_info, 200, "Training Information")
-#plot_end_game_information(validation_info, NUM_VALIDATION_GAMES, "Validation Information")
+plot_end_game_information(training_info, "AI 1", "AI 2", 500, "Training Information for Q-Learning AIs")
 plt.show()
  
-pretty_outcome_display(training_info)
 print("")
-pretty_outcome_display(validation_info)
-  
-"""
- 
-PLAYER1.set_random_move_probability(0)
-pretty_outcome_display(play_n_games(PLAYER1, PLAYER2, NUM_GAMES_TO_TEST, TESTING_MOVE_LIMIT))
-PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
-print(" ")
-pretty_outcome_display(play_n_games(PLAYER1, PLAYER3, NUM_GAMES_TO_TEST, TESTING_MOVE_LIMIT))
-PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
-print(" ")
-pretty_outcome_display(play_n_games(PLAYER1, PLAYER4, NUM_GAMES_TO_TEST, TESTING_MOVE_LIMIT))
-PLAYER1.print_transition_information(PLAYER1.get_transitions_information())
- 
-"""
- 
-PLAYER1.save_transition_information()
 
+training_info = []
+for j in range(NUM_TRAINING_ROUNDS):
+    training_info.extend(play_n_games(PLAYER6, PLAYER5, NUM_GAMES_TO_TRAIN, TRAINING_MOVE_LIMIT))
+    print("Round " + str(j+1) + " completed!")
+
+pretty_outcome_display(training_info, "Q-Learning AI", "Alpha-Beta AI")
+ 
+plot_end_game_information(training_info, "Q-Learning AI", "Alpha-Beta AI", 500, "Training Information for Q-Learning AI and Alpha-Beta Pruning")
+plt.show()
+ 
+print("")
+
+
+PLAYER1.set_learning_rate(0)
+PLAYER3.set_learning_rate(0)
+PLAYER6.set_learning_rate(0)
+
+PLAYER1.set_random_move_probability(0)
+PLAYER3.set_random_move_probability(0)
+PLAYER6.set_random_move_probability(0)
+
+PLAYER3COPY = Q_Learning_AI(False, LEARNING_RATE, DISCOUNT_FACTOR, the_random_move_probability=TRAINING_RANDOM_MOVE_PROBABILITY, info_location="data.json")
+
+validation_info = []
+for j in range(NUM_VALIDATION_ROUNDS):
+    validation_info.extend(play_n_games(PLAYER1, PLAYER3, NUM_VALIDATION_GAMES, VALIDATION_MOVE_LIMIT))
+    print("Round " + str(j+1) + " completed!")
+
+pretty_outcome_display(validation_info, "Q-Learning Trained", "Random Agent Trained")
+    
+plot_end_game_information(validation_info, "Q-Learning Trained", "Random Agent Trained", 5, "Trained Q-Learning AI against each other: Q-Learning Training")
+plt.show()
+
+print("")
+
+validation_info = []
+for j in range(NUM_VALIDATION_ROUNDS):
+    validation_info.extend(play_n_games(PLAYER1, PLAYER3COPY, NUM_VALIDATION_GAMES, VALIDATION_MOVE_LIMIT))
+    print("Round " + str(j+1) + " completed!")
+
+pretty_outcome_display(validation_info, "Alpha-Beta Trained", "Random Agent Trained")
+    
+plot_end_game_information(validation_info, "Alpha-Beta Trained", "Random Agent Trained", 5, "Trained Q-Learning AI against each other: Alpha-Beta Training")
+plt.show()
