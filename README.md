@@ -1,7 +1,11 @@
+## Presentation Video Link
+https://youtu.be/uHLF2ct9R4A
+
 ## Synopsis
 
-This code defines a checkers board, and the ability to officiate a game of checkers between two AI which are playing using the rules I played with as a child, which are the same as traditional American Checkers (English Droughts), except that a win can only be achieved by capturing all of the opponents pieces.  Two AI are defined to compete in checkers, one based in reinforcement learning and one in alpha-beta pruning.  
+This code defines a checkers board, and the ability to officiate a game of checkers between two AI which are playing using the rules I played with as a child, which are the same as traditional American Checkers (English Droughts), except that a win can only be achieved by capturing all of the opponents pieces.
 
+This code is extended to run a series of training games to train two different Q-Learning AIs, trained against two different opponents. These two trained AIs will then compete against a third control agent, trained against random movesets.
 
 ## Alpha-Beta Pruning AI
 
