@@ -1,3 +1,5 @@
+THIS REPOSITORY IS BASED ON THE WORK DONE BY SAM RAGUSA: https://github.com/SamRagusa/Checkers-Reinforcement-Learning
+
 ## Presentation Video Link
 https://youtu.be/uHLF2ct9R4A
 
